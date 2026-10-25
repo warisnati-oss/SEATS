@@ -1,7 +1,10 @@
 // Smoke test of the two Deliverable 3 flows through the gateway. Run the services (npm run dev), then `npm run smoke`.
 const G = process.env.GATEWAY ?? 'http://localhost:4000';
-const H = (userId, role) => ({ 'x-user-id': userId, 'x-role': role, 'content-type': 'application/json' });
-const manager = H('manager-nok', 'manager'), somchai = H('U-somchai', 'customer'), malee = H('U-malee', 'customer');
+const signed = await fetch(G + '/api/sessions', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ username: 'manager', password: 'manager' }) });
+if (!signed.ok) throw new Error(`Staff sign-in failed: ${signed.status}`);
+const session = await signed.json();
+const H = (token) => ({ authorization: `Bearer ${token}`, 'content-type': 'application/json' });
+const manager = { ...H(session.token), 'x-user-id': session.staffAccountId, 'x-role': session.role }, somchai = H('fake-line-U-somchai'), malee = H('fake-line-U-malee');
 let failures = 0;
 async function call(headers, method, path, body, expect) {
   const r = await fetch(G + path, { method, headers, body: body ? JSON.stringify(body) : undefined });

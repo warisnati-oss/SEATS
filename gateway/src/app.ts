@@ -3,7 +3,7 @@
 // A route with auth 'none' (sign-in, the payment webhook) skips the headers and the role check. createApp() builds the
 // app without listening: server.ts listens, and so do the monolith (ADR-14) and the in-process tests.
 import { isGrpcServiceError } from '@seats/errors/src/index.js';
-import { randomUUID } from 'node:crypto';
+import { randomUUID, timingSafeEqual } from 'node:crypto';
 import express, { type Request, type Response } from 'express';
 import grpc from '@grpc/grpc-js';
 import { DEADLINE_MS, healthOf } from './clients.js';
@@ -38,6 +38,9 @@ function mountHealth(app: express.Express): void {
 
 /** Who calls: the progress-1 headers x-user-id and x-role, or a LINE ID token as `Authorization: Bearer` verified by the LINE Login Adapter (a customer). */
 async function identify(req: Request): Promise<{ userId: string; role: Role | '' }> {
+  if (process.env.AUTH_MODE === 'kong') {
+    return { userId: req.get('x-user-id') ?? '', role: (req.get('x-role') ?? '') as Role | '' };
+  }
   const userId = req.get('x-user-id') ?? '';
   const role = (req.get('x-role') ?? '') as Role | '';
   if (userId && role) return { userId, role };
@@ -88,6 +91,18 @@ const handle = (route: Route) => async (req: Request, res: Response) => {
 /** The gateway as an Express app: JSON body, health, one handler per route, JSON 404. */
 export function createApp(): express.Express {
   const app = express();
+  if (process.env.AUTH_MODE === 'kong') {
+    const secret = process.env.SEATS_ADAPTER_SECRET;
+    if (!secret || secret.length < 32) throw new Error('Kong mode requires SEATS_ADAPTER_SECRET (at least 32 characters)');
+    app.use((req, res, next) => {
+      const actual = Buffer.from(req.get('x-seats-gateway-secret') ?? '');
+      const expected = Buffer.from(secret);
+      if (actual.length !== expected.length || !timingSafeEqual(actual, expected)) {
+        res.status(401).json({ error: 'request must come through Kong' }); return;
+      }
+      next();
+    });
+  }
   app.use(express.json({ limit: '2mb' }));
   mountHealth(app);
   for (const route of ROUTES) app[route.method.toLowerCase() as 'get' | 'post' | 'put' | 'delete'](route.path, handle(route));

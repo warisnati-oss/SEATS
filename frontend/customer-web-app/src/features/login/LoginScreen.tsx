@@ -7,7 +7,7 @@ import { LineLoginDialog } from './LineLoginDialog';
 
 /** The LINE chat of the venue's Official Account with its rich menu, and the LINE Login dialog over it. LINE Login
  *  is stubbed: the dialog takes a LINE user id (a fixed demo id when left empty), kept in this browser and sent as
- *  x-user-id on every call; the ID token of ADR-01 replaces it later. Once allowed, the customer lands where they
+ *  a demo fake-line bearer token on every call; real LINE ID tokens replace it later. Once allowed, the customer lands where they
  *  were going (the screen that sent them here), else on the concert rounds. */
 export function LoginScreen() {
   const session = useSession();
@@ -18,7 +18,7 @@ export function LoginScreen() {
   if (session) return <Navigate to={target} replace />;
 
   const allow = (userId: string) => {
-    setSession({ userId, role: 'customer' });
+    setSession({ userId, role: 'customer', token: `fake-line-${userId}` });
     toast.success(`Logged in as ${userId}`);
   };
   const cancel = () => toast.info('Login cancelled. Log in to reserve a table.');

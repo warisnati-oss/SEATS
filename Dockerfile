@@ -24,4 +24,5 @@ COPY gateway ./gateway
 COPY monolith ./monolith
 COPY services ./services
 RUN npm run build
-CMD ["sh", "-c", "node $SERVICE/dist/server.js"]
+# Shared packages are source-only; tsx resolves their .js imports to TypeScript.
+CMD ["sh", "-c", "exec node --import tsx $SERVICE/src/server.ts"]

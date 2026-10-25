@@ -1,11 +1,36 @@
 # Local deployment of the MVP services (Deliverable 3). `docker compose up --build`, then demo/rest-demo.sh.
-# Ports: gateway REST 4000 (the only REST API, ADR-12); gRPC: concert-round 5001, booking 5002, table-availability 5003,
+# Ports: Kong REST 4000; internal REST-to-gRPC adapter 4000 (not published); gRPC: concert-round 5001, booking 5002, table-availability 5003,
 # payment 5004, notification 5005, staff-account 5006.
 services:
   gateway:
-    build: { context: ., args: { SERVICE: gateway } }
-    ports: ["4000:4000"]
+    image: kong:3.9.1
+    ports: ["4000:8000"]
     environment:
+      KONG_PLUGINS: bundled,seats-auth
+      KONG_NGINX_MAIN_ENV: SEATS_ADAPTER_SECRET
+      SEATS_ADAPTER_SECRET: ${SEATS_ADAPTER_SECRET:?Set SEATS_ADAPTER_SECRET in .env}
+      KONG_DATABASE: "off"
+      KONG_DECLARATIVE_CONFIG: /etc/kong/kong.yml
+      KONG_PROXY_LISTEN: 0.0.0.0:8000
+      KONG_ADMIN_LISTEN: "off"
+      KONG_PROXY_ACCESS_LOG: /dev/stdout
+      KONG_PROXY_ERROR_LOG: /dev/stderr
+    volumes:
+      - ./gateway/kong/kong.yml:/etc/kong/kong.yml:ro
+      - ./gateway/kong/plugins/seats-auth:/usr/local/share/lua/5.1/kong/plugins/seats-auth:ro
+    depends_on: [rest-adapter]
+    healthcheck:
+      test: ["CMD", "kong", "health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+  rest-adapter:
+    build: { context: ., args: { SERVICE: gateway } }
+    expose: ["4000"]
+    environment:
+      AUTH_MODE: kong
+      SEATS_ADAPTER_SECRET: ${SEATS_ADAPTER_SECRET:?Set SEATS_ADAPTER_SECRET in .env}
       CONCERT_ROUND_GRPC: concert-round:5001
       BOOKING_GRPC: booking:5002
       TABLE_AVAILABILITY_GRPC: table-availability:5003
@@ -15,29 +40,31 @@ services:
     depends_on: [concert-round, booking, table-availability, payment, notification, staff-account]
   concert-round:
     build: { context: ., args: { SERVICE: services/concert-round } }
-    ports: ["5001:5001"]
+    expose: ["5001"]
     environment:
       TABLE_AVAILABILITY_GRPC: table-availability:5003
       CONCERT_ROUND_MONGO_URL: mongodb://mongo-concert-round:27017/concert-round
     depends_on: [mongo-concert-round]
   table-availability:
     build: { context: ., args: { SERVICE: services/table-availability } }
-    ports: ["5003:5003"]
+    expose: ["5003"]
   booking:
     build: { context: ., args: { SERVICE: services/booking } }
-    ports: ["5002:5002"]
+    expose: ["5002"]
     environment:
       CONCERT_ROUND_GRPC: concert-round:5001
       TABLE_AVAILABILITY_GRPC: table-availability:5003
   payment:
     build: { context: ., args: { SERVICE: services/payment } }
-    ports: ["5004:5004"]
+    expose: ["5004"]
   notification:
     build: { context: ., args: { SERVICE: services/notification } }
-    ports: ["5005:5005"]
+    expose: ["5005"]
   staff-account:
     build: { context: ., args: { SERVICE: services/staff-account } }
-    ports: ["5006:5006"]
+    expose: ["5007"]
+    environment:
+      SESSION_INTROSPECTION_PORT: "5007"
   mongo-concert-round:
     image: mongo:7
     volumes: ["mongo-concert-round-data:/data/db"]

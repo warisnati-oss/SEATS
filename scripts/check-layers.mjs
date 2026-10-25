@@ -5,8 +5,9 @@
 // exits 1 and names every import that breaks the rule; `npm run typecheck` runs it after the compilers.
 import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { join, relative } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
-const ROOT = new URL('..', import.meta.url).pathname;
+const ROOT = fileURLToPath(new URL('..', import.meta.url));
 const requested = process.argv.slice(2);
 const services = (requested.length ? requested : readdirSync(join(ROOT, 'services')).map((s) => `services/${s}`)).map((s) => s.replace(/\/$/, ''));
 

@@ -1,0 +1,30 @@
+# DB-less Kong configuration. Keep REST paths, query strings, headers and bodies intact.
+_format_version: "3.0"
+_transform: true
+
+services:
+  - name: seats-rest-adapter
+    url: http://rest-adapter:4000
+    # Never replay a booking or payment after a transport failure.
+    retries: 0
+    connect_timeout: 5000
+    read_timeout: 60000
+    write_timeout: 60000
+    plugins:
+      - name: seats-auth
+        config:
+          staff_session_url: http://staff-account:5007/internal/session
+          # Explicit demo mode. Use "line" and your channel ID for real LINE ID tokens.
+          line_mode: fake
+          line_channel_id: ""
+    routes:
+      - name: seats-api
+        paths:
+          - /api
+        strip_path: false
+        protocols: [http, https]
+      - name: seats-health
+        paths:
+          - ~/health$
+        strip_path: false
+        protocols: [http, https]

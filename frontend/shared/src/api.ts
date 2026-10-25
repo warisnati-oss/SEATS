@@ -24,6 +24,7 @@ async function send<T>(method: Method, path: string, body?: unknown, extra: Reco
   if (body !== undefined) headers['content-type'] = 'application/json';
   const session = getSession();
   if (session) {
+    // Compatibility with direct Node development; Kong always strips and replaces these.
     headers['x-user-id'] = session.userId;
     headers['x-role'] = session.role;
     if (session.token) headers.authorization = `Bearer ${session.token}`;
